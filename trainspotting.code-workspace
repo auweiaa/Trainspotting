@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "java.project.sourcePaths": ["src"],
+    "java.project.outputPath": "bin",
+    "makefile.configureOnOpen": false
+  }
+}
