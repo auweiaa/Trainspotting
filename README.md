@@ -8,7 +8,7 @@
 - **`main`** – stable / playable / release-ready  
 - **`development`** – integration branch (new work is merged here first)  
 - **`<initials>/feature/<description>`** – new features  
-- **`<initials>/bugfix/<description>`** – bug fixes  
+ 
 
 
 
@@ -19,13 +19,12 @@
 2. **Feature branches are created from `development`** and merged back into `development` via Pull Request.
 
 3. **Merge strategy:**
-   - Feature → `development`: **Merge commit** or **Squash and merge**
+   - Feature → `development`: **Merge commit**
    - `development` → `main`: **Merge commit**  
 
 
 4. **Reviews:**
-   - Pull Requests into `development` require **at least 1 approval**
-   - Pull Requests into `main` require **2 approvals**
+   - Pull Requests into `main` require **1 approval**
 
 ---
 
