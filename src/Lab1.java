@@ -3,23 +3,23 @@ import TSim.*;
 import java.util.Objects;
 import java.util.concurrent.Semaphore;
 
-// Switches bei:
-//  17,7
-//  15,9
-//  4,9
-//  3,11
+
 
 public class Lab1 {
 
   public Lab1(int speed1, int speed2) {
+// for later, when Classes are finished:
+/*     TrainController controller = new TrainController(...);
+    Thread t1 = new Thread(controller)
+    t1.start(); */
+
+
     TSimInterface tsi = TSimInterface.getInstance();
 
     try {
       tsi.setSpeed(1, speed1);
       int currentSpeed = speed1;
     //  tsi.setSpeed(2, speed2);
-
-
 
       try {
         while (true) {
@@ -83,41 +83,13 @@ public class Lab1 {
 // Classes for better Handling the trains (instead of using too much if-else)
 
 enum TrainMode {
-  RUNNING_FORWARD, RUNNING_BACKWARD, WAITING_AT_STATION //,WAITING_FOR_OVERTAKE
+  RUNNING, WAITING_AT_STATION, WAITING_FOR_OVERTAKE;
 } 
 
-// not sure if needed like that. We will decide later :)
-class TrainState {
-  private final int trainId;
-  private int currentSpeed;
-  private TrainMode mode;
-
-  public TrainState(int id, int speed, TrainMode mode) {
-    this.trainId = id;
-    this.currentSpeed = speed;
-    this.mode = mode;
-  }
-
-  public int getTrainId() {
-    return this.trainId;
-  }
-
-  public int getCurrentSpeed() {
-    return this.trainId;
-  }
-
-  public TrainMode getMode() {
-    return this.mode;
-  }
-
-  public void setMode(TrainMode mode ){
-    this.mode = mode;
-  }
-  
-  public void setSpeed(int newSpeed){
-    this.currentSpeed = newSpeed;
-  } 
+enum Direction {
+  FORWARD, BACKWARD;
 }
+
 
 // class for Position in the map. Either Sensor or Switch
 class Position {
@@ -177,8 +149,6 @@ enum SwitchDirection {
 
 // TODO:
 /* 
-  SwitchRule für RUNNING_FORWARD oder RUNNING_BACKWARD (almost done)
-  StationRule für RUNNING_FORWARD oder RUNNING_BACKWARD
   OvertakeRule
  */
 
@@ -188,8 +158,14 @@ enum SwitchDirection {
 // -> passing it as a parameter to the method executeRule
 
 interface Rule {
-  public void executeRule();
+  public void executeRule(TrainController controller);
 }
+
+// Switches bei:
+//  17,7
+//  15,9
+//  4,9
+//  3,11
 
 class SwitchRule implements Rule {
 
@@ -202,47 +178,171 @@ class SwitchRule implements Rule {
   }
 
   @Override
-  public void executeRule() {
-      TSimInterface tsim = TSimInterface.getInstance();
+  public void executeRule(TrainController controller) {
+    controller.setSwitch(position, direction);
+  }
+}
 
-      try {
-        tsim.setSwitch(position.getXpos(), position.getYpos(), direction.toTsimDirection());
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
+class StationRule implements Rule {
+
+  @Override
+  public void executeRule(TrainController controller) {
+        controller.stop();
+        controller.waitAtStation();
+        controller.reverseDirection();
+        controller.resume();
   }
 }
 
 
-// next steps: Dispatcher Class for Rule Map to look up which Rule is needed in which constellation
+
+class Dispatcher {
+
+    private final Map<Position, Map<Direction, Rule>> rules = new HashMap<>();
+
+    public Dispatcher() {
+        initRules();
+    }
+   
+
+    public Rule lookup(Position position, Direction direction) {
+      Map<Direction, Rule> byDirection = rules.get(position);
+      if (byDirection == null) return null;
+      return byDirection.get(direction);
+    }
+
+    private void register(Position position, Direction direction, Rule rule) {
+      rules
+          .computeIfAbsent(position, p -> new HashMap<>())
+          .put(direction, rule);  
+    }
+
+    private void initRules() {
+
+    // -------- SWITCH RULES (FORWARD) --------
+
+    register(
+      new Position(14, 7),
+      Direction.FORWARD,
+      new SwitchRule(new Position(17, 7),SwitchDirection.RIGHT)
+    );
+
+    register(
+      new Position(18, 9),
+      Direction.FORWARD, 
+      new SwitchRule(new Position(15, 9), SwitchDirection.RIGHT)
+    );
+
+    register(
+      new Position(7, 9),
+      Direction.FORWARD,
+      new SwitchRule(new Position(4, 9), SwitchDirection.LEFT)
+    );
+
+    register(
+      new Position(1, 10),
+      Direction.FORWARD,
+      new SwitchRule(new Position(3, 11), SwitchDirection.RIGHT)
+    );
+
+    // -------- SWITCH RULES (BACKWARDS) --------
+
+    register(
+      new Position(6, 11), Direction.BACKWARD,
+      new SwitchRule(new Position(3, 11), SwitchDirection.LEFT)
+    );
+
+    register(
+      new Position(1, 9), Direction.BACKWARD,
+      new SwitchRule(new Position(4, 9), SwitchDirection.LEFT)
+    );
+  
+   register(
+        new Position(12, 9), Direction.BACKWARD,
+        new SwitchRule(new Position(15, 9), SwitchDirection.RIGHT)
+    );
+
+     register(
+        new Position(19, 8), Direction.BACKWARD,
+        new SwitchRule(
+            new Position(17, 7), SwitchDirection.RIGHT
+        )
+    );
 
 
-// Todo: finish map so that the dispathcer class can make look ups / decide what when to do.
+    // -------- STATION RULES --------
+
+    // Station top (FORWARD)
+    register(
+        new Position(13, 13), Direction.FORWARD, new StationRule()
+    );
+
+    // Station bottom (BACKWARD)
+    register(
+        new Position(13, 3), Direction.BACKWARD, new StationRule()
+    );
+}
+}
+
 class TrainController implements Runnable {
   private final int trainId;
-  private TrainState trainState;
-  private Map<Position, List<Rule>> ruleMap;
+  private Direction direction;
+  private TrainMode mode;
+  private Dispatcher dispatcher;
+  private TSimInterface tsi = TSimInterface.getInstance(); 
 
-
-  public TrainController(int id, TrainState state, Map<Position, List<Rule>> ruleMap) {
+  public TrainController(int id, Direction direction, TrainMode mode) {
     this.trainId = id;
-    this.trainState = state;
-    this.ruleMap = ruleMap;
+    this.direction = direction;
+    this.mode = mode;
+    this.dispatcher = new Dispatcher();
   }
 
-  public int getTrainId() {
-    return this.trainId;
+
+  // ToDo:
+  /*       controller.waitAtStation();
+
+        controller.resume(); */
+
+  public void setSwitch(Position position, Direction direction) {
+    try {
+        tsi.setSwitch(position.getXpos(), position.getYpos(), direction.toTsimDirection());
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
   }
 
-  public TrainState getTrainState() {
-    return this.trainState;
+  public void wait(int speed){
+    Thread.sleep(1000 + 20 * Math.abs(speed));
+  } 
+
+  public void stop() {
+    //try -catch
+    tsi.setSpeed(trainId,0);
   }
 
-  public Rule findMatchinRule() {
-    return null;
+  public void setSpeed(int speed) {
+    //try -catch
+    tsi.setSpeed(speed);
   }
 
-  // implementing methods from runnable!!
+  public void reverseDirection() {
+    //ToDo
+  }
 
+  @Override
+  public void run() {
+    try {
+        while (true) {          
+          SensorEvent event = tsi.getSensor(trainId);
+
+          Position sensorPosition = new Position(event.getXpos, event.getYpos);
+
+          Rule rule = dispatcher.lookup(sensorPosition, direction);
+          
+          rule.executeRule();
+      }
+    }
+  }
 
 }
