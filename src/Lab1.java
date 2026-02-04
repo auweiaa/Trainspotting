@@ -12,14 +12,13 @@ public class Lab1 {
   public Lab1(int speed1, int speed2) {
     Dispatcher dispatcher = new Dispatcher();
 
-    TrainController controller1 = new TrainController(dispatcher, 1, speed1, Direction.FORWARD, TrainMode.WAITING_AT_STATION);
+    /* TrainController controller1 = new TrainController(dispatcher, 1, speed1, Direction.TOWARDS_BOTTOM, TrainMode.WAITING_AT_STATION);
     Thread t1 = new Thread(controller1);
-    t1.start();
+    t1.start(); */
     
-    // Does not work yet. Missing Rule for x:12,y:9, FORWARD. But then this sensor would trigger if train 1 would drive over it and set the switch twice.
-/*     TrainController controller2 = new TrainController(dispatcher, 2, speed2, Direction.FORWARD, TrainMode.WAITING_AT_STATION);
+    TrainController controller2 = new TrainController(dispatcher, 2, speed2, Direction.TOWARDS_TOP, TrainMode.WAITING_AT_STATION);
     Thread t2 = new Thread(controller2);
-    t2.start(); */
+    t2.start();
 
     /* // First Test Senario:
     TSimInterface tsi = TSimInterface.getInstance();
@@ -92,8 +91,10 @@ enum TrainMode {
   RUNNING, WAITING_AT_STATION, WAITING_FOR_OVERTAKE;
 } 
 
+
+//better, because global -> less rules needed
 enum Direction {
-  FORWARD, BACKWARD;
+  TOWARDS_TOP, TOWARDS_BOTTOM;
 }
 
 class Position {
@@ -208,73 +209,83 @@ class Dispatcher {
         .put(direction, rule);  
   }
 
+
+  //Todo: change and delete unecessary rule due to global direction state
+  // Todo: decide which Train should go to which station
   private void initRules() {
     // -------- SWITCH RULES (FORWARD) --------
 
     register(new Position(14, 7),
-      Direction.FORWARD,
+      Direction.TOWARDS_BOTTOM,
       new SwitchRule(new Position(17, 7),SwitchDirection.RIGHT)
     );
 
+    register(new Position(15, 8),
+      Direction.TOWARDS_BOTTOM,
+      new SwitchRule(new Position(17, 7),SwitchDirection.LEFT)
+    );
+
     register(new Position(18, 9),
-      Direction.FORWARD, 
+      Direction.TOWARDS_BOTTOM, 
       new SwitchRule(new Position(15, 9), SwitchDirection.RIGHT)
     );
-
+    
     register(new Position(7, 9),
-      Direction.FORWARD,
+      Direction.TOWARDS_BOTTOM,
       new SwitchRule(new Position(4, 9), SwitchDirection.LEFT)
     );
-
+    
+    // depends on which station at bottom is occupied
+    // sensor 6,11 & Direction.TOWARDS_TOP was triggert -> to station at 15,11
+    // else to station at 15,13
+    // semaphor for signaling path is blocked ?
     register(new Position(1, 10),
-      Direction.FORWARD,
+      Direction.TOWARDS_BOTTOM,
       new SwitchRule(new Position(3, 11), SwitchDirection.RIGHT)
     );
 
-    // -------- SWITCH RULES (BACKWARD) --------
-
-    register(new Position(6, 11),
-      Direction.BACKWARD,
-      new SwitchRule(new Position(3, 11), SwitchDirection.LEFT)
+    // depends on which station at top is occupied
+    // sensor 14,9 & Direction.TOWARDS_TOP was triggert -> to station at 15,5
+    // else to station at 15,3
+    register(new Position(19, 8),
+      Direction.TOWARDS_TOP,
+      new SwitchRule(new Position(17, 7),SwitchDirection.RIGHT)
     );
 
-    register(new Position(1, 9),
-      Direction.BACKWARD,
-      new SwitchRule(new Position(4, 9), SwitchDirection.LEFT)
-    );
-  
     register(new Position(12, 9),
-      Direction.BACKWARD,
+      Direction.TOWARDS_TOP, 
       new SwitchRule(new Position(15, 9), SwitchDirection.RIGHT)
     );
 
-    register(new Position(19, 8), 
-      Direction.BACKWARD,
-      new SwitchRule(new Position(17, 7), SwitchDirection.RIGHT)
+    register(new Position(1, 9),
+      Direction.TOWARDS_TOP,
+      new SwitchRule(new Position(4, 9), SwitchDirection.LEFT)
+    );
+
+    register(new Position(6, 11),
+      Direction.TOWARDS_TOP,
+      new SwitchRule(new Position(3, 11), SwitchDirection.LEFT)
     );
 
     // -------- STATION RULES --------
 
-    // Station top - Train 2 (FORWARD)
     register(new Position(13, 5),
-      Direction.FORWARD,
+      Direction.TOWARDS_TOP,
       new StationRule()
     );
     
-    // Station top - Train 1 (BACKWARD)
     register(new Position(13, 3),
-      Direction.BACKWARD,
+      Direction.TOWARDS_TOP,
       new StationRule()
     );
 
-    // Station bottom - Train 1 (FORWARD)
     register(new Position(13, 13),
-      Direction.FORWARD,
+      Direction.TOWARDS_BOTTOM,
       new StationRule()
     );
-    // Station bottom - Train 2 (BACKWARD)
+
     register(new Position(13, 11),
-      Direction.BACKWARD,
+      Direction.TOWARDS_BOTTOM,
       new StationRule()
     );
   }
@@ -338,16 +349,8 @@ class TrainController implements Runnable {
   }
 
   public void reverseDirection() {
-    try {
-      this.currentSpeed *= -1;
-      if (Math.signum(this.currentSpeed) > 0) {
-        this.direction = Direction.FORWARD;
-      } else {
-        this.direction = Direction.BACKWARD;
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
+    this.direction = (this.direction == Direction.TOWARDS_TOP) ? Direction.TOWARDS_BOTTOM : Direction.TOWARDS_TOP;
+    this.currentSpeed *= -1;
   }
 
   @Override
