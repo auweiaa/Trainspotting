@@ -1,38 +1,29 @@
 import TSim.*;
-
 import java.util.Objects;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.Semaphore;
 
-
-
 public class Lab1 {
-
   public Lab1(int speed1, int speed2) {
     Dispatcher dispatcher = new Dispatcher();
     
-    TrainController controller1 = new TrainController(dispatcher, 1, speed1, Direction.TOWARDS_BOTTOM, TrainMode.WAITING_AT_STATION);
+    TrainController controller1 = new TrainController(dispatcher, 1, speed1, Direction.SOUTH);
     Thread t1 = new Thread(controller1);
     t1.start();
     
-    TrainController controller2 = new TrainController(dispatcher, 2, speed2, Direction.TOWARDS_TOP, TrainMode.WAITING_AT_STATION);
+    TrainController controller2 = new TrainController(dispatcher, 2, speed2, Direction.NORTH);
     Thread t2 = new Thread(controller2);
     t2.start();
   }
 }
-// ----- Enums -----
-enum TrainMode {
-  RUNNING, WAITING_AT_STATION, WAITING_FOR_OVERTAKE;
-} 
 
-//better, because global -> less rules needed
+// ----- Enums -----
 enum Direction {
-  TOWARDS_TOP, TOWARDS_BOTTOM;
+  NORTH, SOUTH;
 }
 
 // ----- Classes -----
-
 class TrainController implements Runnable {
   private final TSimInterface tsi = TSimInterface.getInstance();
   private final Dispatcher dispatcher;
@@ -40,27 +31,29 @@ class TrainController implements Runnable {
   private int currentSpeed;
   private Direction direction;
   private boolean usingUpperTrack = false;
-  private TrainMode mode;
+  private boolean usingUpperStaion = false;
 
-  public TrainController(Dispatcher dispatcher, int id, int speed, Direction direction, TrainMode mode) {
+  public TrainController(Dispatcher dispatcher, int id, int speed, Direction direction) {
     this.trainId = id;
     this.dispatcher = dispatcher;
     this.currentSpeed = speed;
     this.direction = direction;
-    this.mode = mode;
   }
-
-  // for later
-/*   public Direction getDirection() {
-    return this.direction;
-  } */
 
   public boolean getUsingUpperTrack() {
     return this.usingUpperTrack;
   }
 
+  public boolean getUsingUpperStation() {
+    return this.usingUpperStaion;
+  }
+
   public void setUsingUpperTrack(boolean choice) {
     this.usingUpperTrack = choice;
+  }
+
+  public void setUsingUpperStation(boolean choice) {
+    this.usingUpperStaion = choice;
   }
 
   public void acquireSection(Semaphore section) {
@@ -70,6 +63,13 @@ class TrainController implements Runnable {
       Thread.currentThread().interrupt();
     }
   }
+/*   public void acquireStation(Semaphore section) {
+    try {
+      section.acquire();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  } */
 
   public boolean tryAcquireSection(Semaphore section) {
     return section.tryAcquire();
@@ -106,22 +106,23 @@ class TrainController implements Runnable {
   public void waitAtStation() {
     this.stop();
     this.sleepAtStation();
-    this.mode = TrainMode.WAITING_AT_STATION;
   }
 
+  // !!!!!!!!!!!
+  // ToDo:
   // method for overtaking rule
+  // !!!!!!!!!!!
 
   public void resume() {
     try {
       tsi.setSpeed(trainId, this.currentSpeed);
-      this.mode = TrainMode.RUNNING;
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
 
   public void reverseDirection() {
-    this.direction = (this.direction == Direction.TOWARDS_TOP) ? Direction.TOWARDS_BOTTOM : Direction.TOWARDS_TOP;
+    this.direction = (this.direction == Direction.NORTH) ? Direction.SOUTH : Direction.NORTH;
     this.currentSpeed *= -1;
   }
 
@@ -132,12 +133,9 @@ class TrainController implements Runnable {
 
         while (true) {     
           SensorEvent event = tsi.getSensor(trainId);
-
-          if (event.getStatus() != SensorEvent.ACTIVE) continue;
-
           Position sensorPosition = new Position(event.getXpos(), event.getYpos());
-
-          Rule rule = dispatcher.lookup(sensorPosition, direction);
+          int status = event.getStatus();
+          Rule rule = dispatcher.lookup(sensorPosition, direction, status);
           if (rule == null) continue;
           rule.executeRule(this);
       }
@@ -148,222 +146,291 @@ class TrainController implements Runnable {
 }
 
 class Dispatcher {
-  private final Map<Position, Map<Direction, Rule>> rules = new HashMap<>();
+  // rulebook idea: Sensor-Position -> Moving-Direction -> Sensor-Status -> Rule (to be executed)
+  private final Map<Position, Map<Direction, Map<Integer, Rule>>> rules = new HashMap<>();
 
-  private final Semaphore rightNeckMiddleSection = new Semaphore(1, true);
-  private final Semaphore leftNeckMiddleSection = new Semaphore(1, true);
-  private final Semaphore upperMiddleSection = new Semaphore(1, true);
-  private final Semaphore lowerMiddleSection = new Semaphore(1, true);
+  private final Semaphore eastSection = new Semaphore(1, true);
+  private final Semaphore westSection = new Semaphore(1, true);
+  private final Semaphore upperTrackMiddleSection = new Semaphore(1, true);
+  private final Semaphore lowerTrackMiddleSection = new Semaphore(1, true);
+  private final Semaphore upperTrackSouthSection = new Semaphore(1, true);
+  private final Semaphore lowerTrackSouthSection = new Semaphore(1, true);
+  private final Semaphore upperTrackNorthSection = new Semaphore(1, true);
+  private final Semaphore lowerTrackNorthSection = new Semaphore(1, true);
 
   public Dispatcher() {
       initRules();
   }
 
-  public Rule lookup(Position position, Direction direction) {
-    Map<Direction, Rule> rulesByDirection = rules.get(position);
-
-    if (rulesByDirection == null) {
-      return null;
-    } else {
-      return rulesByDirection.get(direction);
-    }
+  // Position -> Direction -> Status -> Rule
+  public Rule lookup(Position position, Direction direction, int status) {
+    Map<Direction, Map<Integer, Rule>> rulesByDirection = rules.get(position);
+    if (rulesByDirection == null) return null;
+    
+    Map<Integer, Rule> rulesByStatus = rulesByDirection.get(direction);
+    if (rulesByStatus == null) return null;
+      
+    return rulesByStatus.get(status);
   }
 
-  private void register(Position position, Direction direction, Rule rule) {
-    rules
-        .computeIfAbsent(position, p -> new HashMap<>())
-        .put(direction, rule);  
+  private void register(Position position, Direction direction, int status, Rule rule) {
+    this.rules
+              .computeIfAbsent(position, p -> new HashMap<>())
+              .computeIfAbsent(direction, d -> new HashMap<>())
+              .put(status, rule);  
   }
 
-  // Todo: decide which Train should go to which station
+  // creating the rulebook which the dispatcher uses to look up for rules
   private void initRules() {
-    // ----- SWITCH RULES -----
+    int switchRight = TSimInterface.SWITCH_RIGHT;
+    int switchLeft = TSimInterface.SWITCH_LEFT;
 
-    /* register(new Position(14, 7),
-      Direction.TOWARDS_BOTTOM,
-      new SwitchRule(new Position(17, 7), TSimInterface.SWITCH_RIGHT)
+    // ----- Acquire Station RULES -----
+
+    // Maybe not necessary, dont know yet
+    // to indicate that a train block diretly a station, so a really fast train
+    // cant directly choose this station
+
+ /*    // --- Direction: NORTH ---
+    // - Section: SOUTH -
+    register(new Position(13, 11),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new BlockingStationRule(upperTrackSouthSection)
     );
 
-    register(new Position(15, 8),
-      Direction.TOWARDS_BOTTOM,
-      new SwitchRule(new Position(17, 7), TSimInterface.SWITCH_LEFT)
+    register(new Position(13, 13),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new BlockingStationRule(lowerTrackSouthSection)
     );
 
-/*     register(new Position(18, 9),
-      Direction.TOWARDS_BOTTOM, 
-      new SwitchRule(new Position(15, 9), TSimInterface.SWITCH_RIGHT)
+    // --- Direction: SOUTH ---
+    // - Section: NORTH -
+    register(new Position(13, 3),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new BlockingStationRule(upperTrackNorthSection)
+    );
+
+    register(new Position(13, 5),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new BlockingStationRule(lowerTrackNorthSection)
     ); */
-    
-    /* register(new Position(7, 9),
-      Direction.TOWARDS_BOTTOM,
-      new SwitchRule(new Position(4, 9), TSimInterface.SWITCH_LEFT)
-    );
-    
-    // depends on which station at bottom is occupied
-    // sensor 6,11 & Direction.TOWARDS_TOP was triggert -> to station at 15,11
-    // else to station at 15,13
-    // semaphor for signaling path is blocked ?
-    register(new Position(1, 10),
-      Direction.TOWARDS_BOTTOM,
-      new SwitchRule(new Position(3, 11), TSimInterface.SWITCH_RIGHT)
-    );
-
-    // depends on which station at top is occupied
-    // sensor 14,9 & Direction.TOWARDS_TOP was triggert -> to station at 15,5
-    // else to station at 15,3
-    register(new Position(19, 8),
-      Direction.TOWARDS_TOP,
-      new SwitchRule(new Position(17, 7), TSimInterface.SWITCH_RIGHT)
-    );
-
-    register(new Position(12, 9),
-      Direction.TOWARDS_TOP, 
-      new SwitchRule(new Position(15, 9), TSimInterface.SWITCH_RIGHT)
-    );
-
-    register(new Position(1, 9),
-      Direction.TOWARDS_TOP,
-      new SwitchRule(new Position(4, 9), TSimInterface.SWITCH_LEFT)
-    );
-
-    register(new Position(6, 11),
-      Direction.TOWARDS_TOP,
-      new SwitchRule(new Position(3, 11), TSimInterface.SWITCH_LEFT)
-    ); */
-
-    // ------------------------------------------------------------------------------------------------------
 
     // ----- AcquireSwitch RULES -----
 
-    register(new Position(12,9),
-      Direction.TOWARDS_TOP,
-      new AquireAndSetSwitchNeckRule(rightNeckMiddleSection, new Position(15,9 ), TSimInterface.SWITCH_RIGHT)
-    );
-    register(new Position(13,10 ),
-      Direction.TOWARDS_TOP,
-      new AquireAndSetSwitchNeckRule(rightNeckMiddleSection, new Position(15,9), TSimInterface.SWITCH_RIGHT)
+    // --- Direction: NORTH ---
+    // - Section: NORTH -
+    register(new Position(19, 8),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new ChooseStationAndSetSwitchRule(
+        upperTrackNorthSection,
+        lowerTrackNorthSection,
+        new Position(3, 11), 
+        switchRight,
+        switchLeft
+      )
     );
 
-    register(new Position(14, 7),
-      Direction.TOWARDS_BOTTOM,
-      new AquireAndSetSwitchNeckRule(rightNeckMiddleSection, new Position(17, 7), TSimInterface.SWITCH_RIGHT)
+    // - Section: EAST -
+    register(new Position(12,9),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(eastSection, new Position(15,9 ), switchRight)
     );
-    register(new Position(15, 8),
-      Direction.TOWARDS_BOTTOM,
-      new AquireAndSetSwitchNeckRule(rightNeckMiddleSection, new Position(17, 7), TSimInterface.SWITCH_RIGHT)
+
+    register(new Position(13,10 ),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(eastSection, new Position(15,9), switchLeft)
+    );
+
+    // - Section: Middle -
+    register(new Position(1, 9),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new ChooseMidTrackAndSetSwitchRule(
+        upperTrackMiddleSection,
+        lowerTrackMiddleSection,
+        new Position(4, 9), 
+        switchLeft,
+        switchRight
+      )
+    );
+
+    // - Section: WEST -
+    register(new Position(4, 13),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(westSection, new Position(3, 11), switchRight)
     );
 
     register(new Position(6, 11),
-      Direction.TOWARDS_TOP,
-      new AquireAndSetSwitchNeckRule(leftNeckMiddleSection, new Position(3, 11), TSimInterface.SWITCH_LEFT)
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(westSection, new Position(3, 11), switchLeft)
     );
 
-    register(new Position(4, 13),
-      Direction.TOWARDS_TOP,
-      new AquireAndSetSwitchNeckRule(leftNeckMiddleSection, new Position(3, 11), TSimInterface.SWITCH_LEFT)
+    // --- Direction: SOUTH ---
+    // - Section: EAST -
+    register(new Position(14, 7),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(eastSection, new Position(17, 7), switchRight)
+    );
+    register(new Position(15, 8),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(eastSection, new Position(17, 7), switchLeft)
     );
 
+    // - Section: WEST -
     register(new Position(7, 9),
-      Direction.TOWARDS_BOTTOM,
-      new AquireAndSetSwitchNeckRule(leftNeckMiddleSection, new Position(4, 9), TSimInterface.SWITCH_LEFT)
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(westSection, new Position(4, 9), switchLeft)
     );
     
     register(new Position(6, 10),
-      Direction.TOWARDS_BOTTOM,
-      new AquireAndSetSwitchNeckRule(leftNeckMiddleSection, new Position(4, 9), TSimInterface.SWITCH_RIGHT)
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AquireAndSetSwitchRule(westSection, new Position(4, 9), switchRight)
     );
 
-    register(new Position(1, 9),
-      Direction.TOWARDS_BOTTOM,
-      new ChooseMidTrackAndSetSwitchRule(
-        upperMiddleSection,
-        lowerMiddleSection,
-        new Position(4, 9), 
-        TSimInterface.SWITCH_LEFT,
-        TSimInterface.SWITCH_RIGHT)
-    );
-
+    // - Section: MIDDLE -
     register(new Position(18, 9),
-      Direction.TOWARDS_BOTTOM,
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
       new ChooseMidTrackAndSetSwitchRule(
-        upperMiddleSection,
-        lowerMiddleSection,
+        upperTrackMiddleSection,
+        lowerTrackMiddleSection,
         new Position(15, 9), 
-        TSimInterface.SWITCH_RIGHT,
-        TSimInterface.SWITCH_LEFT)
+        switchRight,
+        switchLeft
+      )
+    );
+
+    // - Section: SOUTH -
+    register(new Position(1, 10),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new ChooseStationAndSetSwitchRule(
+        upperTrackSouthSection,
+        lowerTrackSouthSection,
+        new Position(3, 11), 
+        switchLeft,
+        switchRight
+      )
     );
 
     // ----- Release Rules -----
-    register(new Position(1, 9),
-      Direction.TOWARDS_BOTTOM,
-      new ReleaseMidTrackRule(upperMiddleSection, lowerMiddleSection)
-    );
-
-    register(new Position(18, 9),
-      Direction.TOWARDS_TOP,
-      new ReleaseMidTrackRule(upperMiddleSection, lowerMiddleSection)
-    );
-
-    register(new Position(12, 9),
-      Direction.TOWARDS_BOTTOM,
-      new RelaseTrack(rightNeckMiddleSection)
-    );
-
-    register(new Position(13, 10),
-      Direction.TOWARDS_BOTTOM,
-      new RelaseTrack(rightNeckMiddleSection)
-    );
-
-
+    // --- Direction: NORTH ---
+    // - Section: EAST -
     register(new Position(15, 8),
-      Direction.TOWARDS_TOP,
-      new RelaseTrack(rightNeckMiddleSection)
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(eastSection)
     );
 
     register(new Position(14, 17),
-      Direction.TOWARDS_TOP,
-      new RelaseTrack(rightNeckMiddleSection)
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(eastSection)
     );
 
+    // - Section: MIDDLE -
+    register(new Position(18, 9),
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
+    );
+
+    // - Section: WEST -
     register(new Position(7, 9),
-      Direction.TOWARDS_TOP,
-      new RelaseTrack(leftNeckMiddleSection)
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(westSection)
     );
 
     register(new Position(6, 10),
-      Direction.TOWARDS_TOP,
-      new RelaseTrack(leftNeckMiddleSection)
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(westSection)
     );
-    
+
+    // - Section: SOUTH -
+    register(new Position(1, 10),
+      Direction.NORTH,
+      SensorEvent.INACTIVE,
+      new ReleaseStationRule(upperTrackSouthSection, lowerTrackSouthSection)
+    );
+
+    // --- Direction: SOUTH ---
+    // - Section: NORTH -
+    register(new Position(19, 8),
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseStationRule(upperTrackNorthSection, lowerTrackNorthSection)
+    );
+
+    // - Section: EAST -
+    register(new Position(12, 9),
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(eastSection)
+    );
+
+    register(new Position(13, 10),
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(eastSection)
+    );
+
+    // - Section: MIDDLE -
+    register(new Position(1, 9),
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
+    );
+
+    // - Section: WEST -
     register(new Position(6, 11),
-      Direction.TOWARDS_BOTTOM,
-      new RelaseTrack(leftNeckMiddleSection)
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(westSection)
     );
 
     register(new Position(4, 13),
-      Direction.TOWARDS_BOTTOM,
-      new RelaseTrack(leftNeckMiddleSection)
+      Direction.SOUTH,
+      SensorEvent.INACTIVE,
+      new ReleaseTrackRule(westSection)
     );
 
     // ----- STATION RULES -----
-
     register(new Position(13, 5),
-      Direction.TOWARDS_TOP,
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
       new StationRule()
     );
     
     register(new Position(13, 3),
-      Direction.TOWARDS_TOP,
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
       new StationRule()
     );
 
     register(new Position(13, 13),
-      Direction.TOWARDS_BOTTOM,
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
       new StationRule()
     );
 
     register(new Position(13, 11),
-      Direction.TOWARDS_BOTTOM,
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
       new StationRule()
     );
   }
@@ -439,12 +506,25 @@ class StationRule implements Rule {
   }
 }
 
-class AquireAndSetSwitchNeckRule implements Rule {
+/* class BlockingStationRule implements Rule {
+  private final Semaphore section;
+
+  public BlockingStationRule(Semaphore section) {
+    this.section = section;
+  }
+
+  @Override
+  public void executeRule(TrainController controller) {
+    // ToDo: distinguish between station so in ReleaseStationRule the right semaphore can released
+  }
+} */
+
+class AquireAndSetSwitchRule implements Rule {
   private final Semaphore section;
   private final Position position;
   private final int switchDirection;
 
-  public AquireAndSetSwitchNeckRule(Semaphore section, Position position, int switchDirection) {
+  public AquireAndSetSwitchRule(Semaphore section, Position position, int switchDirection) {
     this.section = section;
     this.position = position;
     this.switchDirection = switchDirection;
@@ -452,7 +532,6 @@ class AquireAndSetSwitchNeckRule implements Rule {
 
   @Override
   public void executeRule(TrainController controller) {
-      //stop, acquire, switch, resume
       controller.stop();
       controller.acquireSection(section);
       controller.setSwitch(position, switchDirection);
@@ -479,7 +558,6 @@ class ChooseMidTrackAndSetSwitchRule implements Rule {
 
   @Override
   public void executeRule(TrainController controller) {
-      //stop, acquire, switch, resume
       controller.stop();
       if (controller.tryAcquireSection(upperSection)) {
         controller.setUsingUpperTrack(true);
@@ -487,6 +565,38 @@ class ChooseMidTrackAndSetSwitchRule implements Rule {
       } else {
         controller.acquireSection(lowerSection);
         controller.setUsingUpperTrack(false);
+        controller.setSwitch(position, lowerSwitchDirection);        
+      }
+      controller.resume();
+  }
+}
+
+class ChooseStationAndSetSwitchRule implements Rule {
+  private final Semaphore upperSection;
+  private final Semaphore lowerSection;
+  private final Position position;
+  private final int upperSwitchDirection;
+  private final int lowerSwitchDirection;
+
+  public ChooseStationAndSetSwitchRule(Semaphore upperSection, Semaphore lowerSection, 
+      Position position, int upperSwitchDirection, int lowerSwitchDirection) {
+
+    this.upperSection = upperSection;
+    this.lowerSection = lowerSection;
+    this.position = position;
+    this.upperSwitchDirection = upperSwitchDirection;
+    this.lowerSwitchDirection = lowerSwitchDirection;
+  }
+
+  @Override
+  public void executeRule(TrainController controller) {
+      controller.stop();
+      if (controller.tryAcquireSection(upperSection)) {
+        controller.setUsingUpperStation(true);
+        controller.setSwitch(position, upperSwitchDirection);
+      } else {
+        controller.acquireSection(lowerSection);
+        controller.setUsingUpperStation(false);
         controller.setSwitch(position, lowerSwitchDirection);        
       }
       controller.resume();
@@ -512,15 +622,34 @@ class ReleaseMidTrackRule implements Rule {
   }
 }
 
-class RelaseTrack implements Rule {
+class ReleaseTrackRule implements Rule {
   private final Semaphore section;
 
-  public RelaseTrack(Semaphore section) {
+  public ReleaseTrackRule(Semaphore section) {
     this.section = section;
   }
 
   @Override
   public void executeRule(TrainController controller) {
     controller.release(section);
+  }
+}
+
+class ReleaseStationRule implements Rule {
+  private final Semaphore upperSection;
+  private final Semaphore lowerSection;
+
+  public ReleaseStationRule(Semaphore upperSection, Semaphore lowerSection) {
+    this.upperSection = upperSection;
+    this.lowerSection = lowerSection;
+  }
+
+  @Override
+  public void executeRule(TrainController controller) {
+    if (controller.getUsingUpperStation()) {
+      controller.release(upperSection);
+    } else {
+      controller.release(lowerSection);
+    }
   }
 }
