@@ -102,11 +102,6 @@ class TrainController implements Runnable {
     this.sleepAtStation();
   }
 
-  // !!!!!!!!!!!
-  // ToDo:
-  // method for overtaking rule
-  // !!!!!!!!!!!
-
   public void resume() {
     try {
       tsi.setSpeed(trainId, this.currentSpeed);
@@ -184,13 +179,13 @@ class Dispatcher {
 
     // --- Direction: NORTH ---
     // - Section: CROSSING -
-    register(new Position(10, 7),
+    register(new Position(11, 7),
       Direction.NORTH,
       SensorEvent.ACTIVE,
       new AcquireRule(crossingSection)
     );
 
-    register(new Position(9, 8),
+    register(new Position(10, 8),
       Direction.NORTH,
       SensorEvent.ACTIVE,
       new AcquireRule(crossingSection)
@@ -198,13 +193,13 @@ class Dispatcher {
 
     // --- Direction: SOUTH ---
     // - Section: CROSSING -
-    register(new Position(8, 5),
+    register(new Position(9, 5),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
       new AcquireRule(crossingSection)
     );
 
-    register(new Position(6, 7),
+    register(new Position(6, 6),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
       new AcquireRule(crossingSection)
@@ -214,13 +209,13 @@ class Dispatcher {
 
     // --- Direction: NORTH ---
     // - Section: SOUTH -
-    register(new Position(13, 11),
+    register(new Position(14, 11),
       Direction.NORTH,
       SensorEvent.ACTIVE,
       new AcquireStationRule(upperTrackSouthSection, lowerTrackSouthSection, true)
     );
 
-    register(new Position(13, 13),
+    register(new Position(14, 13),
       Direction.NORTH,
       SensorEvent.ACTIVE,
       new AcquireStationRule(upperTrackSouthSection, lowerTrackSouthSection, false)
@@ -228,13 +223,13 @@ class Dispatcher {
 
     // --- Direction: SOUTH ---
     // - Section: NORTH -
-    register(new Position(13, 3),
+    register(new Position(14, 3),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
       new AcquireStationRule(upperTrackNorthSection, lowerTrackNorthSection, true)
     );
 
-    register(new Position(13, 5),
+    register(new Position(14, 5),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
       new AcquireStationRule(upperTrackNorthSection, lowerTrackNorthSection, false)
@@ -302,6 +297,7 @@ class Dispatcher {
       SensorEvent.ACTIVE,
       new AquireAndSetSwitchRule(eastSection, new Position(17, 7), switchRight)
     );
+
     register(new Position(15, 8),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
@@ -347,33 +343,58 @@ class Dispatcher {
       )
     );
 
+    // ----- Stopping At Station Rules -----
+    register(new Position(14, 5),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new StopAtStationRule()
+    );
+    
+    register(new Position(14, 3),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new StopAtStationRule()
+    );
+
+    register(new Position(14, 13),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new StopAtStationRule()
+    );
+
+    register(new Position(14, 11),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new StopAtStationRule()
+    );
+
     // ----- Release Rules -----
 
     // --- Direction: NORTH ---
     // - Section: CROSSING -
-    register(new Position(6, 7),
+    register(new Position(6, 6),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(crossingSection)
     );
 
-    register(new Position(8, 5),
+    register(new Position(9, 5),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(crossingSection)
     );
 
     // --- Direction: SOUTH ---
     // - Section: CROSSING -
-    register(new Position(9, 8),
+    register(new Position(10, 8),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(crossingSection)
     );
 
-    register(new Position(10, 7),
+    register(new Position(11, 7),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(crossingSection)
     );
 
@@ -381,107 +402,83 @@ class Dispatcher {
     // - Section: EAST -
     register(new Position(15, 8),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     register(new Position(14, 7),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     // - Section: MIDDLE -
     register(new Position(18, 9),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
     );
 
     // - Section: WEST -
     register(new Position(7, 9),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     register(new Position(6, 10),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     // - Section: SOUTH -
     register(new Position(1, 10),
       Direction.NORTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseStationRule(upperTrackSouthSection, lowerTrackSouthSection)
     );
 
     // --- Direction: SOUTH ---
+
     // - Section: NORTH -
     register(new Position(19, 8),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseStationRule(upperTrackNorthSection, lowerTrackNorthSection)
     );
 
     // - Section: EAST -
     register(new Position(12, 9),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     register(new Position(13, 10),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     // - Section: MIDDLE -
     register(new Position(1, 9),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
     );
 
     // - Section: WEST -
     register(new Position(6, 11),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     register(new Position(4, 13),
       Direction.SOUTH,
-      SensorEvent.ACTIVE,
+      SensorEvent.INACTIVE,
       new ReleaseTrackRule(westSection)
-    );
-
-    // ----- Stopping At Station Rules -----
-    register(new Position(13, 5),
-      Direction.NORTH,
-      SensorEvent.ACTIVE,
-      new StopAtStationRule()
-    );
-    
-    register(new Position(13, 3),
-      Direction.NORTH,
-      SensorEvent.ACTIVE,
-      new StopAtStationRule()
-    );
-
-    register(new Position(13, 13),
-      Direction.SOUTH,
-      SensorEvent.ACTIVE,
-      new StopAtStationRule()
-    );
-
-    register(new Position(13, 11),
-      Direction.SOUTH,
-      SensorEvent.ACTIVE,
-      new StopAtStationRule()
     );
   }
 }
@@ -521,8 +518,6 @@ class Position {
   }
 }
 
-// Todo: OvertakeRule for train that is faster than the other
-
 // ------ Rules -----
 
 interface Rule {
@@ -549,6 +544,7 @@ class AcquireRule implements Rule {
   public void executeRule(TrainController controller) {
     controller.stop();
     controller.acquireSection(section);
+    System.out.println("train aquired crossing: " + section);
     controller.resume();
   }  
 }
