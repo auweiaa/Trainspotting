@@ -151,6 +151,7 @@ class Dispatcher {
   private final Semaphore lowerTrackSouthSection = new Semaphore(1, true);
   private final Semaphore upperTrackNorthSection = new Semaphore(1, true);
   private final Semaphore lowerTrackNorthSection = new Semaphore(1, true);
+  private final Semaphore crossingSection = new Semaphore(1, true);
 
   public Dispatcher() {
       initRules();
@@ -179,11 +180,37 @@ class Dispatcher {
     int switchRight = TSimInterface.SWITCH_RIGHT;
     int switchLeft = TSimInterface.SWITCH_LEFT;
 
-    // ----- Acquire Station RULES -----
+    // ----- Acquire Rules -----
 
-    // Maybe not necessary, dont know yet
-    // to indicate that a train block diretly a station, so a really fast train
-    // cant directly choose this station
+    // --- Direction: NORTH ---
+    // - Section: CROSSING -
+    register(new Position(10, 7),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AcquireRule(crossingSection)
+    );
+
+    register(new Position(9, 8),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new AcquireRule(crossingSection)
+    );
+
+    // --- Direction: SOUTH ---
+    // - Section: CROSSING -
+    register(new Position(8, 5),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AcquireRule(crossingSection)
+    );
+
+    register(new Position(6, 7),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new AcquireRule(crossingSection)
+    );
+
+    // ----- Acquire Station Rules -----
 
     // --- Direction: NORTH ---
     // - Section: SOUTH -
@@ -213,7 +240,7 @@ class Dispatcher {
       new AcquireStationRule(upperTrackNorthSection, lowerTrackNorthSection, false)
     );
 
-    // ----- AcquireSwitch RULES -----
+    // ----- Acquire and Set Switch Rules -----
 
     // --- Direction: NORTH ---
     // - Section: NORTH -
@@ -321,6 +348,35 @@ class Dispatcher {
     );
 
     // ----- Release Rules -----
+
+    // --- Direction: NORTH ---
+    // - Section: CROSSING -
+    register(new Position(6, 7),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new ReleaseTrackRule(crossingSection)
+    );
+
+    register(new Position(8, 5),
+      Direction.NORTH,
+      SensorEvent.ACTIVE,
+      new ReleaseTrackRule(crossingSection)
+    );
+
+    // --- Direction: SOUTH ---
+    // - Section: CROSSING -
+    register(new Position(9, 8),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new ReleaseTrackRule(crossingSection)
+    );
+
+    register(new Position(10, 7),
+      Direction.SOUTH,
+      SensorEvent.ACTIVE,
+      new ReleaseTrackRule(crossingSection)
+    );
+
     // --- Direction: NORTH ---
     // - Section: EAST -
     register(new Position(15, 8),
@@ -403,7 +459,7 @@ class Dispatcher {
       new ReleaseTrackRule(westSection)
     );
 
-    // ----- STATION RULES -----
+    // ----- Stopping At Station Rules -----
     register(new Position(13, 5),
       Direction.NORTH,
       SensorEvent.ACTIVE,
@@ -473,24 +529,6 @@ interface Rule {
   public void executeRule(TrainController controller);
 }
 
-// not necessary without acauiring a semaphore
-/* class SwitchRule implements Rule {
-  private final Position position;
-  private final int switchDirection;
-  
-  public SwitchRule(Position position, int switchDirection) {
-    this.position = position;
-    this.switchDirection = switchDirection;
-  }
-
-  @Override
-  public void executeRule(TrainController controller) {
-    controller.stop();
-    controller.setSwitch(position, switchDirection);
-    controller.resume();
-  }
-} */
-
 class StopAtStationRule implements Rule {
   @Override
   public void executeRule(TrainController controller) {
@@ -498,6 +536,21 @@ class StopAtStationRule implements Rule {
         controller.reverseDirection();
         controller.resume();
   }
+}
+
+class AcquireRule implements Rule {
+  private final Semaphore section;
+
+  public AcquireRule(Semaphore section) {
+    this.section = section;
+  }
+
+  @Override
+  public void executeRule(TrainController controller) {
+    controller.stop();
+    controller.acquireSection(section);
+    controller.resume();
+  }  
 }
 
 class AcquireStationRule implements Rule {
