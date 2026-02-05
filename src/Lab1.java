@@ -30,8 +30,8 @@ class TrainController implements Runnable {
   private final int trainId;
   private int currentSpeed;
   private Direction direction;
-  private boolean usingUpperTrack = false;
-  private boolean usingUpperStaion = false;
+  private boolean usingUpperOfParallelTracks = false;
+  private boolean usingUpperOfParallelStations = false;
 
   public TrainController(Dispatcher dispatcher, int id, int speed, Direction direction) {
     this.trainId = id;
@@ -40,36 +40,30 @@ class TrainController implements Runnable {
     this.direction = direction;
   }
 
-  public boolean getUsingUpperTrack() {
-    return this.usingUpperTrack;
+  public boolean getUsingUpperOfParallelTracks() {
+    return this.usingUpperOfParallelTracks;
   }
 
-  public boolean getUsingUpperStation() {
-    return this.usingUpperStaion;
+  public boolean getUsingUpperOfParallelStations() {
+    return this.usingUpperOfParallelStations;
   }
 
-  public void setUsingUpperTrack(boolean choice) {
-    this.usingUpperTrack = choice;
+  public void setUsingUpperOfParallelTracks(boolean choice) {
+    this.usingUpperOfParallelTracks = choice;
   }
 
-  public void setUsingUpperStation(boolean choice) {
-    this.usingUpperStaion = choice;
+  public void setUsingUpperOfParallelStations(boolean choice) {
+    this.usingUpperOfParallelStations = choice;
   }
 
   public void acquireSection(Semaphore section) {
     try {
       section.acquire();
+      System.out.println("train " + trainId);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
   }
-/*   public void acquireStation(Semaphore section) {
-    try {
-      section.acquire();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
-  } */
 
   public boolean tryAcquireSection(Semaphore section) {
     return section.tryAcquire();
@@ -103,7 +97,7 @@ class TrainController implements Runnable {
     }
   } 
 
-  public void waitAtStation() {
+  public void stopAtStation() {
     this.stop();
     this.sleepAtStation();
   }
@@ -191,18 +185,18 @@ class Dispatcher {
     // to indicate that a train block diretly a station, so a really fast train
     // cant directly choose this station
 
- /*    // --- Direction: NORTH ---
+    // --- Direction: NORTH ---
     // - Section: SOUTH -
     register(new Position(13, 11),
-      Direction.SOUTH,
+      Direction.NORTH,
       SensorEvent.ACTIVE,
-      new BlockingStationRule(upperTrackSouthSection)
+      new AcquireStationRule(upperTrackSouthSection, lowerTrackSouthSection, true)
     );
 
     register(new Position(13, 13),
-      Direction.SOUTH,
+      Direction.NORTH,
       SensorEvent.ACTIVE,
-      new BlockingStationRule(lowerTrackSouthSection)
+      new AcquireStationRule(upperTrackSouthSection, lowerTrackSouthSection, false)
     );
 
     // --- Direction: SOUTH ---
@@ -210,14 +204,14 @@ class Dispatcher {
     register(new Position(13, 3),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
-      new BlockingStationRule(upperTrackNorthSection)
+      new AcquireStationRule(upperTrackNorthSection, lowerTrackNorthSection, true)
     );
 
     register(new Position(13, 5),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
-      new BlockingStationRule(lowerTrackNorthSection)
-    ); */
+      new AcquireStationRule(upperTrackNorthSection, lowerTrackNorthSection, false)
+    );
 
     // ----- AcquireSwitch RULES -----
 
@@ -229,7 +223,7 @@ class Dispatcher {
       new ChooseStationAndSetSwitchRule(
         upperTrackNorthSection,
         lowerTrackNorthSection,
-        new Position(3, 11), 
+        new Position(17, 7),
         switchRight,
         switchLeft
       )
@@ -331,40 +325,40 @@ class Dispatcher {
     // - Section: EAST -
     register(new Position(15, 8),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
-    register(new Position(14, 17),
+    register(new Position(14, 7),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     // - Section: MIDDLE -
     register(new Position(18, 9),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
     );
 
     // - Section: WEST -
     register(new Position(7, 9),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     register(new Position(6, 10),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     // - Section: SOUTH -
     register(new Position(1, 10),
       Direction.NORTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseStationRule(upperTrackSouthSection, lowerTrackSouthSection)
     );
 
@@ -372,40 +366,40 @@ class Dispatcher {
     // - Section: NORTH -
     register(new Position(19, 8),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseStationRule(upperTrackNorthSection, lowerTrackNorthSection)
     );
 
     // - Section: EAST -
     register(new Position(12, 9),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     register(new Position(13, 10),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(eastSection)
     );
 
     // - Section: MIDDLE -
     register(new Position(1, 9),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseMidTrackRule(upperTrackMiddleSection, lowerTrackMiddleSection)
     );
 
     // - Section: WEST -
     register(new Position(6, 11),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
     register(new Position(4, 13),
       Direction.SOUTH,
-      SensorEvent.INACTIVE,
+      SensorEvent.ACTIVE,
       new ReleaseTrackRule(westSection)
     );
 
@@ -413,25 +407,25 @@ class Dispatcher {
     register(new Position(13, 5),
       Direction.NORTH,
       SensorEvent.ACTIVE,
-      new StationRule()
+      new StopAtStationRule()
     );
     
     register(new Position(13, 3),
       Direction.NORTH,
       SensorEvent.ACTIVE,
-      new StationRule()
+      new StopAtStationRule()
     );
 
     register(new Position(13, 13),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
-      new StationRule()
+      new StopAtStationRule()
     );
 
     register(new Position(13, 11),
       Direction.SOUTH,
       SensorEvent.ACTIVE,
-      new StationRule()
+      new StopAtStationRule()
     );
   }
 }
@@ -472,7 +466,6 @@ class Position {
 }
 
 // Todo: OvertakeRule for train that is faster than the other
-// ToDo: in switching Rule: handling blocked trail with semaphor
 
 // ------ Rules -----
 
@@ -480,7 +473,8 @@ interface Rule {
   public void executeRule(TrainController controller);
 }
 
-class SwitchRule implements Rule {
+// not necessary without acauiring a semaphore
+/* class SwitchRule implements Rule {
   private final Position position;
   private final int switchDirection;
   
@@ -495,29 +489,41 @@ class SwitchRule implements Rule {
     controller.setSwitch(position, switchDirection);
     controller.resume();
   }
-}
+} */
 
-class StationRule implements Rule {
+class StopAtStationRule implements Rule {
   @Override
   public void executeRule(TrainController controller) {
-        controller.waitAtStation();
+        controller.stopAtStation();
         controller.reverseDirection();
         controller.resume();
   }
 }
 
-/* class BlockingStationRule implements Rule {
-  private final Semaphore section;
+class AcquireStationRule implements Rule {
+  private final Semaphore upperSection;
+  private final Semaphore lowerSection;
+  private final boolean isUpper;
 
-  public BlockingStationRule(Semaphore section) {
-    this.section = section;
+  public AcquireStationRule(Semaphore upperSection, Semaphore lowerSection, boolean isUpper) {
+    this.upperSection = upperSection;
+    this.lowerSection = lowerSection;
+    this.isUpper = isUpper;
   }
 
   @Override
   public void executeRule(TrainController controller) {
-    // ToDo: distinguish between station so in ReleaseStationRule the right semaphore can released
+    if (isUpper) {
+      controller.acquireSection(upperSection);
+      controller.setUsingUpperOfParallelStations(true);
+      System.out.println("train aquired station: " + upperSection);
+    } else {
+      controller.acquireSection(lowerSection);
+      controller.setUsingUpperOfParallelStations(false);
+      System.out.println("train aquired station: " + lowerSection);
+    }
   }
-} */
+}
 
 class AquireAndSetSwitchRule implements Rule {
   private final Semaphore section;
@@ -534,6 +540,7 @@ class AquireAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       controller.acquireSection(section);
+      System.out.println("train aquired one track section: " + section);
       controller.setSwitch(position, switchDirection);
       controller.resume();
   }
@@ -560,11 +567,13 @@ class ChooseMidTrackAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       if (controller.tryAcquireSection(upperSection)) {
-        controller.setUsingUpperTrack(true);
+        System.out.println("train acquired track section: " + upperSection);
+        controller.setUsingUpperOfParallelTracks(true);
         controller.setSwitch(position, upperSwitchDirection);
       } else {
         controller.acquireSection(lowerSection);
-        controller.setUsingUpperTrack(false);
+        System.out.println("train acquired track section: " + lowerSection);
+        controller.setUsingUpperOfParallelTracks(false);
         controller.setSwitch(position, lowerSwitchDirection);        
       }
       controller.resume();
@@ -592,11 +601,13 @@ class ChooseStationAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       if (controller.tryAcquireSection(upperSection)) {
-        controller.setUsingUpperStation(true);
+        System.out.println("train acquired station: " + upperSection);
+        controller.setUsingUpperOfParallelStations(true);
         controller.setSwitch(position, upperSwitchDirection);
       } else {
         controller.acquireSection(lowerSection);
-        controller.setUsingUpperStation(false);
+        System.out.println("train acquired station: " + lowerSection);
+        controller.setUsingUpperOfParallelStations(false);
         controller.setSwitch(position, lowerSwitchDirection);        
       }
       controller.resume();
@@ -614,10 +625,12 @@ class ReleaseMidTrackRule implements Rule {
 
   @Override
   public void executeRule(TrainController controller) {
-    if (controller.getUsingUpperTrack()) {
+    if (controller.getUsingUpperOfParallelTracks()) {
       controller.release(upperSection);
+      System.out.println("train released one track section: " + upperSection);
     } else {
       controller.release(lowerSection);
+      System.out.println("train released one track section: " + lowerSection);
     }
   }
 }
@@ -632,6 +645,7 @@ class ReleaseTrackRule implements Rule {
   @Override
   public void executeRule(TrainController controller) {
     controller.release(section);
+    System.out.println("train released one track section: " + section);
   }
 }
 
@@ -646,10 +660,12 @@ class ReleaseStationRule implements Rule {
 
   @Override
   public void executeRule(TrainController controller) {
-    if (controller.getUsingUpperStation()) {
+    if (controller.getUsingUpperOfParallelStations()) {
       controller.release(upperSection);
+      System.out.println("train released station: " + upperSection);
     } else {
       controller.release(lowerSection);
+      System.out.println("train released station: " + lowerSection);
     }
   }
 }
