@@ -19,11 +19,14 @@ public class Lab1 {
 }
 
 // ----- Enums -----
+// direction a train can have on the map
 enum Direction {
   NORTH, SOUTH;
 }
 
 // ----- Classes -----
+
+// Controlls the action of a single train
 class TrainController implements Runnable {
   private final TSimInterface tsi = TSimInterface.getInstance();
   private final Dispatcher dispatcher;
@@ -59,7 +62,6 @@ class TrainController implements Runnable {
   public void acquireSection(Semaphore section) {
     try {
       section.acquire();
-      System.out.println("train " + trainId);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
@@ -483,6 +485,8 @@ class Dispatcher {
   }
 }
 
+// a class for describing location on the map. 
+// it is used for position of sensors and switches
 class Position {
   private int xPos;
   private int yPos;
@@ -519,7 +523,7 @@ class Position {
 }
 
 // ------ Rules -----
-
+// they define an action a TrainController needs to execute in certain circumstances
 interface Rule {
   public void executeRule(TrainController controller);
 }
@@ -544,7 +548,6 @@ class AcquireRule implements Rule {
   public void executeRule(TrainController controller) {
     controller.stop();
     controller.acquireSection(section);
-    System.out.println("train aquired crossing: " + section);
     controller.resume();
   }  
 }
@@ -565,11 +568,9 @@ class AcquireStationRule implements Rule {
     if (isUpper) {
       controller.acquireSection(upperSection);
       controller.setUsingUpperOfParallelStations(true);
-      System.out.println("train aquired station: " + upperSection);
     } else {
       controller.acquireSection(lowerSection);
       controller.setUsingUpperOfParallelStations(false);
-      System.out.println("train aquired station: " + lowerSection);
     }
   }
 }
@@ -589,7 +590,6 @@ class AquireAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       controller.acquireSection(section);
-      System.out.println("train aquired one track section: " + section);
       controller.setSwitch(position, switchDirection);
       controller.resume();
   }
@@ -616,12 +616,10 @@ class ChooseMidTrackAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       if (controller.tryAcquireSection(upperSection)) {
-        System.out.println("train acquired track section: " + upperSection);
         controller.setUsingUpperOfParallelTracks(true);
         controller.setSwitch(position, upperSwitchDirection);
       } else {
         controller.acquireSection(lowerSection);
-        System.out.println("train acquired track section: " + lowerSection);
         controller.setUsingUpperOfParallelTracks(false);
         controller.setSwitch(position, lowerSwitchDirection);        
       }
@@ -650,12 +648,10 @@ class ChooseStationAndSetSwitchRule implements Rule {
   public void executeRule(TrainController controller) {
       controller.stop();
       if (controller.tryAcquireSection(upperSection)) {
-        System.out.println("train acquired station: " + upperSection);
         controller.setUsingUpperOfParallelStations(true);
         controller.setSwitch(position, upperSwitchDirection);
       } else {
         controller.acquireSection(lowerSection);
-        System.out.println("train acquired station: " + lowerSection);
         controller.setUsingUpperOfParallelStations(false);
         controller.setSwitch(position, lowerSwitchDirection);        
       }
@@ -676,10 +672,8 @@ class ReleaseMidTrackRule implements Rule {
   public void executeRule(TrainController controller) {
     if (controller.getUsingUpperOfParallelTracks()) {
       controller.release(upperSection);
-      System.out.println("train released one track section: " + upperSection);
     } else {
       controller.release(lowerSection);
-      System.out.println("train released one track section: " + lowerSection);
     }
   }
 }
@@ -694,7 +688,6 @@ class ReleaseTrackRule implements Rule {
   @Override
   public void executeRule(TrainController controller) {
     controller.release(section);
-    System.out.println("train released one track section: " + section);
   }
 }
 
@@ -711,10 +704,8 @@ class ReleaseStationRule implements Rule {
   public void executeRule(TrainController controller) {
     if (controller.getUsingUpperOfParallelStations()) {
       controller.release(upperSection);
-      System.out.println("train released station: " + upperSection);
     } else {
       controller.release(lowerSection);
-      System.out.println("train released station: " + lowerSection);
     }
   }
 }
